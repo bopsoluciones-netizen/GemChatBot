@@ -202,7 +202,7 @@ export default function BrandingSettings() {
                 <Label htmlFor="tone">Tono de Voz</Label>
                 <Select 
                   value={account.tone} 
-                  onValueChange={(val) => setAccount({...account, tone: val})}
+                  onValueChange={(val: string) => setAccount({...account, tone: val})}
                 >
                   <SelectTrigger id="tone w-full">
                     <SelectValue placeholder="Selecciona un tono" />
