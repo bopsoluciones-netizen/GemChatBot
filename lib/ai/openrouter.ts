@@ -28,7 +28,11 @@ export async function getOpenRouterResponse(
     ${context}
   `
 
-  const apiKey = "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"
+  const apiKey = process.env.OPENROUTER_API_KEY
+  
+  if (!apiKey) {
+    throw new Error("OPENROUTER_API_KEY is not defined in environment variables")
+  }
 
   const response = await fetch("https://openrouter.ai/api/v1/chat/completions", {
     method: "POST",
