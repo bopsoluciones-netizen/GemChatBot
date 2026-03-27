@@ -8,13 +8,15 @@ export async function getRelevantContext(accountId: string, query: string) {
   // In a production RAG system, we would use vector embeddings and similarity search.
   const { data: sources } = await supabase
     .from("knowledge_sources")
-    .select("content")
+    .select("title, content, source_type")
     .eq("account_id", accountId)
 
   if (!sources || sources.length === 0) {
-    return "No hay información específica disponible para esta empresa."
+    return "No hay información específica disponible para esta empresa en la base de conocimientos."
   }
 
-  // Combine top content chunks
-  return sources.map(s => s.content).join("\n\n---\n\n")
+  // Combine content with titles for better AI understanding
+  return sources
+    .map(s => `FUENTE: ${s.title} (${s.source_type})\nCONTENIDO: ${s.content}`)
+    .join("\n\n---\n\n")
 }
