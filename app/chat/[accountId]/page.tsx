@@ -250,7 +250,7 @@ export default function PublicChatPage() {
                   {msg.role === 'user' ? <User className="h-4 w-4" /> : <Bot className="h-4 w-4" />}
                 </div>
                 <div className={cn(
-                  "rounded-2xl px-4 py-2.5 text-sm shadow-sm max-w-[85%]",
+                  "rounded-2xl px-4 py-2.5 text-sm shadow-sm max-w-[85%] whitespace-pre-wrap",
                   msg.role === 'user' 
                     ? "bg-zinc-900 text-zinc-50 rounded-tr-none" 
                     : "bg-white border text-zinc-900 rounded-tl-none"
