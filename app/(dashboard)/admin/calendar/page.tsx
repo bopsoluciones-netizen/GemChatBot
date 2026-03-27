@@ -41,7 +41,7 @@ export default function AdminCalendarPage() {
     const { data: accData } = await supabase
       .from("chatbot_accounts")
       .select("*")
-      .eq("creator_id", user?.id)
+      .or(`creator_id.eq.${user?.id},admin_id.eq.${user?.id}`)
       .single()
 
     if (accData) {
@@ -107,7 +107,21 @@ export default function AdminCalendarPage() {
     }
   }
 
-  if (loading) return <div>Cargando calendario...</div>
+  if (loading) return <div className="flex h-64 items-center justify-center">Cargando calendario...</div>
+
+  if (!account && !loading) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[60vh] space-y-4">
+        <div className="p-4 bg-rose-50 rounded-full">
+           <CalendarDays className="h-12 w-12 text-rose-500" />
+        </div>
+        <h2 className="text-xl font-bold">Sin cuenta asignada</h2>
+        <p className="text-zinc-500 text-center max-w-sm">
+          No tienes acceso a un calendario todavía. Contacta con el administrador.
+        </p>
+      </div>
+    )
+  }
 
   const selectedDateAppointments = appointments.filter(a => 
     date && format(new Date(a.start_time), 'yyyy-MM-dd') === format(date, 'yyyy-MM-dd')

@@ -50,6 +50,8 @@ export default function AccountsPage() {
   const [isCreateOpen, setIsCreateOpen] = useState(false)
   const [newAccountName, setNewAccountName] = useState("")
   const [newAccountSlug, setNewAccountSlug] = useState("")
+  const [newAdminEmail, setNewAdminEmail] = useState("")
+  const [newPassword, setNewPassword] = useState("")
   const supabase = createClient()
 
   useEffect(() => {
@@ -72,32 +74,41 @@ export default function AccountsPage() {
   }
 
   const handleCreateAccount = async () => {
-    if (!newAccountName || !newAccountSlug) {
-      toast.error("Completa todos los campos")
+    if (!newAccountName || !newAccountSlug || !newAdminEmail || !newPassword) {
+      toast.error("Completa todos los campos obligatorios", { description: "Nombre, Slug, Email y Contraseña son necesarios." })
       return
     }
 
-    const { data: { user } } = await supabase.auth.getUser()
+    setLoading(true)
+    try {
+      const res = await fetch("/api/creator/accounts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: newAccountName,
+          slug: newAccountSlug,
+          adminEmail: newAdminEmail,
+          password: newPassword
+        })
+      })
 
-    const { data, error } = await supabase
-      .from("chatbot_accounts")
-      .insert([
-        { 
-          name: newAccountName, 
-          slug: newAccountSlug.toLowerCase().replace(/\s+/g, '-'),
-          creator_id: user?.id
-        }
-      ])
-      .select()
+      const data = await res.json()
 
-    if (error) {
-      toast.error("Error al crear cuenta", { description: error.message })
-    } else {
-      toast.success("Cuenta creada exitosamente")
-      setIsCreateOpen(false)
-      setNewAccountName("")
-      setNewAccountSlug("")
-      fetchAccounts()
+      if (data.error) {
+        toast.error("Error al crear cuenta", { description: data.error })
+      } else {
+        toast.success("Cuenta y usuario administrador creados exitosamente")
+        setIsCreateOpen(false)
+        setNewAccountName("")
+        setNewAccountSlug("")
+        setNewAdminEmail("")
+        setNewPassword("")
+        fetchAccounts()
+      }
+    } catch (err: any) {
+      toast.error("Error de conexión", { description: err.message })
+    } finally {
+      setLoading(false)
     }
   }
 
@@ -144,12 +155,12 @@ export default function AccountsPage() {
           <p className="text-zinc-500">Administra las cuentas de chatbot para tus clientes.</p>
         </div>
         <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
-          <DialogTrigger asChild>
+          <DialogTrigger render={
             <Button className="gap-2">
               <Plus className="h-4 w-4" />
               Nueva Cuenta
             </Button>
-          </DialogTrigger>
+          } />
           <DialogContent>
             <DialogHeader>
               <DialogTitle>Crear Nueva Cuenta</DialogTitle>
@@ -179,6 +190,28 @@ export default function AccountsPage() {
                   />
                 </div>
               </div>
+              <div className="grid gap-2">
+                <Label htmlFor="adminEmail">Email del Administrador</Label>
+                <Input 
+                  id="adminEmail" 
+                  type="email"
+                  value={newAdminEmail} 
+                  onChange={(e) => setNewAdminEmail(e.target.value)}
+                  placeholder="admin@empresa.com" 
+                  required
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="password">Contraseña para el Administrador</Label>
+                <Input 
+                  id="password" 
+                  type="password"
+                  value={newPassword} 
+                  onChange={(e) => setNewPassword(e.target.value)}
+                  placeholder="Mínimo 6 caracteres" 
+                  required
+                />
+              </div>
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setIsCreateOpen(false)}>Cancelar</Button>
@@ -206,6 +239,7 @@ export default function AccountsPage() {
             <TableRow>
               <TableHead>Empresa</TableHead>
               <TableHead>Status</TableHead>
+              <TableHead>Admin Asignado</TableHead>
               <TableHead>Slug</TableHead>
               <TableHead>Creada en</TableHead>
               <TableHead className="text-right">Acciones</TableHead>
@@ -228,17 +262,20 @@ export default function AccountsPage() {
                     {account.is_active ? "Activa" : "Inactiva"}
                   </Badge>
                 </TableCell>
+                <TableCell className="text-xs text-zinc-500">
+                  {account.admin_email || "Sin asignar"}
+                </TableCell>
                 <TableCell className="text-zinc-500">/{account.slug}</TableCell>
                 <TableCell className="text-zinc-500">
                   {new Date(account.created_at).toLocaleDateString()}
                 </TableCell>
                 <TableCell className="text-right">
                   <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
+                    <DropdownMenuTrigger render={
                       <Button variant="ghost" className="h-8 w-8 p-0">
                         <MoreHorizontal className="h-4 w-4" />
                       </Button>
-                    </DropdownMenuTrigger>
+                    } />
                     <DropdownMenuContent align="end">
                       <DropdownMenuLabel>Acciones</DropdownMenuLabel>
                       <DropdownMenuItem onClick={() => window.open(`/chat/${account.slug}`, '_blank')}>

@@ -1,11 +1,18 @@
-import { isCreator } from "@/lib/supabase/auth-helpers"
+import { getProfile } from "@/lib/supabase/auth-helpers"
 import { redirect } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Users, Bot, BarChart3, TrendingUp } from "lucide-react"
 
 export default async function CreatorDashboard() {
-  const creator = await isCreator()
-  if (!creator) redirect("/admin")
+  const profile = await getProfile()
+  
+  if (!profile) {
+    redirect("/login")
+  }
+
+  if (profile.role === 'admin') {
+    redirect("/admin")
+  }
 
   return (
     <div className="space-y-6">

@@ -8,22 +8,31 @@ export async function getGeminiResponse(
   tone: string, 
   companyName: string
 ) {
-  const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" })
+  const model = genAI.getGenerativeModel({ 
+    model: "gemini-3-flash-preview",
+    tools: [
+      {
+        googleSearch: {}
+      }
+    ] as any
+  })
 
   const systemPrompts: Record<string, string> = {
     amigable: "Eres un asistente virtual amigable, cercano y servicial.",
-    formal: "Eres un asistente virtual profesional, formal y serio.",
-    comercial: "Eres un asistente virtual enfocado en ventas, persuasivo y dinámico.",
-    informativo: "Eres un asistente virtual informativo, directo y basado puramente en hechos.",
+    formal: "Eres un asistente virtual corporativo, profesional y preciso.",
+    comercial: "Eres un asistente virtual enfocado en negocios, persuasivo y analítico.",
+    informativo: "Eres un asistente virtual experto, directo y basado en datos actualizados.",
   }
 
   const basePrompt = `
     ${systemPrompts[tone] || systemPrompts.amigable}
     Trabajas para la empresa: ${companyName}.
     
-    REGLA CRÍTICA: Solo puedes responder usando la información proporcionada en el CONTEXTO a continuación.
-    Si la respuesta no está en el contexto, di amablemente que no tienes esa información y ofrece que un humano se contacte con ellos.
-    NUNCA inventes información.
+    INSTRUCCIONES DE RESPUESTA:
+    1. Utiliza prioritariamente la información en el CONTEXTO para responder sobre temas internos.
+    2. Si la información no está en el CONTEXTO, busca en la web información pública y relevante sobre "${companyName}" o el tema consultado para dar una respuesta completa.
+    3. Si después de buscar no encuentras información fiable, indícalo amablemente y sugiere contactar a soporte.
+    4. Siempre mantén un tono extremadamente profesional y evita inventar datos.
     
     Si el usuario quiere agendar una cita o muestra interés en una reunión, responde con: "[SOLICITUD_CITA]".
     

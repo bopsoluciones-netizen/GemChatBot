@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/table"
 import { Button } from "@/components/ui/button"
 import { MessageSquare, Calendar, ExternalLink, Download } from "lucide-react"
+import { toast } from "sonner"
 import { Badge } from "@/components/ui/badge"
 
 export default function AdminConversationsPage() {
@@ -28,26 +29,40 @@ export default function AdminConversationsPage() {
     setLoading(true)
     const { data: { user } } = await supabase.auth.getUser()
     
-    const { data: accData } = await supabase
+    const { data, error } = await supabase
       .from("chatbot_accounts")
       .select("*")
-      .eq("creator_id", user?.id)
+      .or(`creator_id.eq.${user?.id},admin_id.eq.${user?.id}`)
       .single()
 
-    if (accData) {
-      setAccount(accData)
-      const { data } = await supabase
+    if (data) { // Changed from accData to data
+      setAccount(data) // Changed from accData to data
+      const { data: conversationsData } = await supabase // Renamed data to conversationsData to avoid conflict
         .from("conversations")
         .select("*, leads(full_name)")
-        .eq("account_id", accData.id)
+        .eq("account_id", data.id) // Changed from accData.id to data.id
         .order("created_at", { ascending: false })
       
-      setConversations(data || [])
+      setConversations(conversationsData || []) // Changed from data to conversationsData
     }
     setLoading(false)
   }
 
-  if (loading) return <div>Cargando conversaciones...</div>
+  if (loading) return <div className="flex h-64 items-center justify-center">Cargando conversaciones...</div>
+
+  if (!account && !loading) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[60vh] space-y-4">
+        <div className="p-4 bg-teal-50 rounded-full">
+           <MessageSquare className="h-12 w-12 text-teal-500" />
+        </div>
+        <h2 className="text-xl font-bold">Sin cuenta asignada</h2>
+        <p className="text-zinc-500 text-center max-w-sm">
+          No hay un historial de conversaciones disponible para tu usuario.
+        </p>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
@@ -108,6 +123,3 @@ export default function AdminConversationsPage() {
   )
 }
 
-function toast(arg0: { info: string }) {
-  throw new Error("Function not implemented.")
-}

@@ -1,18 +1,50 @@
-import { isAdmin } from "@/lib/supabase/auth-helpers"
+import { isAdmin, getProfile } from "@/lib/supabase/auth-helpers"
 import { redirect } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Users, MessageSquare, Calendar, MousePointer2 } from "lucide-react"
+import { Users, MessageSquare, Calendar, MousePointer2, AlertCircle } from "lucide-react"
+import { createClient } from "@/lib/supabase/server"
 
 export default async function AdminDashboard() {
-  const admin = await isAdmin()
-  if (!admin) redirect("/creator")
+  const profile = await getProfile()
+  
+  if (!profile) {
+    redirect("/login")
+  }
+
+  if (profile.role === 'creator') {
+    redirect("/creator")
+  }
+
+  const supabase = await createClient()
+  const { data: account } = await supabase
+    .from("chatbot_accounts")
+    .select("*")
+    .or(`creator_id.eq.${profile.id},admin_id.eq.${profile.id}`)
+    .single()
+
+  if (!account) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[70vh] space-y-4">
+        <div className="p-4 bg-amber-50 rounded-full dark:bg-amber-950/30">
+          <AlertCircle className="h-12 w-12 text-amber-500" />
+        </div>
+        <h2 className="text-2xl font-bold">Bienvenido, {profile.full_name}</h2>
+        <p className="text-zinc-500 text-center max-w-md">
+          Aún no tienes un chatbot vinculado a tu cuenta. 
+          Un Creador debe asignarte una cuenta de empresa usando tu email: 
+          <span className="font-bold block mt-1 text-zinc-900 dark:text-zinc-100">{profile.email}</span>
+        </p>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold tracking-tight">Panel de Administración</h1>
+        <h1 className="text-3xl font-bold tracking-tight">Panel de Administración: {account.name}</h1>
         <p className="text-zinc-500">Gestión de tu chatbot inteligente y atención al cliente.</p>
       </div>
+      {/* ... rest of the dashboard ... */}
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card className="border-0 shadow-sm bg-gradient-to-br from-indigo-50 to-white dark:from-indigo-950 dark:to-zinc-900">

@@ -51,12 +51,21 @@ export default function KnowledgeBasePage() {
     setLoading(true)
     const { data: { user } } = await supabase.auth.getUser()
     
+    if (!user) {
+      setLoading(false)
+      return
+    }
+
     // Fetch account
-    const { data: accData } = await supabase
+    const { data: accData, error: accError } = await supabase
       .from("chatbot_accounts")
       .select("*")
-      .eq("creator_id", user?.id)
+      .or(`creator_id.eq.${user.id},admin_id.eq.${user.id}`)
       .single()
+
+    if (accError) {
+      console.error("Error fetching account:", accError)
+    }
 
     if (accData) {
       setAccount(accData)
@@ -74,7 +83,12 @@ export default function KnowledgeBasePage() {
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
-    if (!file || !account) return
+    if (!file) return
+
+    if (!account) {
+      toast.error("No se encontró una cuenta de chatbot vinculada")
+      return
+    }
 
     setUploading(true)
     const fileExt = file.name.split('.').pop()
@@ -92,14 +106,42 @@ export default function KnowledgeBasePage() {
       .upload(fileName, file)
 
     if (uploadError) {
-      toast.error("Error al subir archivo")
+      console.error("Error uploading file:", uploadError)
+      if (uploadError.message === 'Bucket not found') {
+        toast.error("Error de configuración: El bucket 'knowledge' no existe en Supabase Storage.")
+      } else {
+        toast.error(`Error al subir archivo: ${uploadError.message}`)
+      }
     } else {
       const { data: { publicUrl } } = supabase.storage
         .from('knowledge')
         .getPublicUrl(fileName)
 
       // In a real app, you would call a server function here to extract text.
-      // For this base version, we'll just save the source record.
+      // For this base version, we'll now call the extraction API.
+      const { data: { user } } = await supabase.auth.getUser()
+      
+      let content = "Texto procesándose..."
+      try {
+        const extractRes = await fetch("/api/extract", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ type, fileUrl: publicUrl })
+        })
+
+        if (!extractRes.ok) {
+           const errorData = await extractRes.json().catch(() => ({ error: "Error de servidor al extraer texto" }))
+           throw new Error(errorData.error || `Error ${extractRes.status}`)
+        }
+
+        const extractData = await extractRes.json()
+        if (extractData.text) {
+          content = extractData.text
+        }
+      } catch (err) {
+        console.error("Failed to extract text:", err)
+      }
+
       const { error: dbError } = await supabase
         .from("knowledge_sources")
         .insert([{
@@ -107,11 +149,18 @@ export default function KnowledgeBasePage() {
           title: file.name,
           source_type: type,
           source_url: publicUrl,
-          content: "Texto procesándose..." // Placeholder for actual extraction
+          content: content
         }])
 
       if (dbError) {
-        toast.error("Error al registrar fuente")
+        console.error("Error registering source details:", {
+          message: dbError.message,
+          details: dbError.details,
+          hint: dbError.hint,
+          code: dbError.code,
+          supabaseError: dbError
+        })
+        toast.error(`Error al registrar fuente: ${dbError.message || "Error de permisos o esquema"}`)
       } else {
         toast.success("Archivo subido exitosamente")
         fetchData()
@@ -121,9 +170,62 @@ export default function KnowledgeBasePage() {
   }
 
   const handleAddUrl = async () => {
-    if (!url || !urlTitle || !account) return
+    if (!urlTitle.trim()) {
+      toast.error("Por favor ingresa un título para el link")
+      return
+    }
+
+    if (!url.trim()) {
+      toast.error("Por favor ingresa una URL válida")
+      return
+    }
+
+    // Basic URL validation
+    try {
+      if (!url.startsWith('http://') && !url.startsWith('https://')) {
+        throw new Error();
+      }
+      new URL(url);
+    } catch {
+      toast.error("La URL debe ser válida y comenzar con http:// o https://")
+      return
+    }
+
+    if (!account) {
+      toast.error("No se encontró una cuenta de chatbot vinculada")
+      return
+    }
 
     setUploading(true)
+    const { data: { user } } = await supabase.auth.getUser()
+
+    if (!user) {
+       toast.error("Sesión de usuario no encontrada")
+       setUploading(false)
+       return
+    }
+
+    let content = `Contenido de ${url} se indexará próximamente.`
+    try {
+      const extractRes = await fetch("/api/extract", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "url", url })
+      })
+
+      if (!extractRes.ok) {
+         const errorData = await extractRes.json().catch(() => ({ error: "Error de servidor al extraer URL" }))
+         toast.error(errorData.error || "No se pudo extraer el contenido del link")
+      } else {
+        const extractData = await extractRes.json()
+        if (extractData.text) {
+          content = extractData.text
+        }
+      }
+    } catch (err) {
+       console.error("Failed to extract URL text:", err)
+    }
+
     const { error } = await supabase
       .from("knowledge_sources")
       .insert([{
@@ -131,13 +233,24 @@ export default function KnowledgeBasePage() {
         title: urlTitle,
         source_type: urlType,
         source_url: url,
-        content: `Contenido de ${url} se indexará próximamente.`
+        content: content
       }])
 
     if (error) {
-      toast.error("Error al guardar link")
+      console.error("Error saving link details:", {
+        message: error.message,
+        details: error.details,
+        hint: error.hint,
+        code: error.code,
+        supabaseError: error,
+        account_id: account.id,
+        title: urlTitle,
+        source_type: urlType,
+        source_url: url
+      })
+      toast.error(`Error al guardar link: ${error.message || "Error de permisos o esquema"}`)
     } else {
-      toast.success("Link agregado")
+      toast.success("Link agregado exitosamente")
       setIsModalOpen(false)
       setUrl("")
       setUrlTitle("")
@@ -182,12 +295,12 @@ export default function KnowledgeBasePage() {
           <p className="text-zinc-500">Carga documentos y links para entrenar a tu chatbot.</p>
         </div>
         <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
-          <DialogTrigger asChild>
+          <DialogTrigger render={
             <Button className="gap-2">
               <Plus className="h-4 w-4" />
               Nueva Fuente
             </Button>
-          </DialogTrigger>
+          } />
           <DialogContent className="sm:max-w-[500px]">
             <DialogHeader>
               <DialogTitle>Agregar Conocimiento</DialogTitle>

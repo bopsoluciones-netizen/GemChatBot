@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server"
 import { getRelevantContext } from "@/lib/ai/rag"
-import { getGeminiResponse } from "@/lib/ai/gemini"
+import { getOpenRouterResponse } from "@/lib/ai/openrouter"
 import { createClient } from "@/lib/supabase/server"
 
 export async function POST(req: Request) {
@@ -20,8 +20,8 @@ export async function POST(req: Request) {
     // 2. Get Context (RAG)
     const context = await getRelevantContext(accountId, message)
 
-    // 3. Get Gemini Response
-    const aiResponse = await getGeminiResponse(message, context, account.tone, account.name)
+    // 3. Get OpenRouter Response
+    const aiResponse = await getOpenRouterResponse(message, context, account.tone, account.name)
 
     // 4. Save messages to DB
     await supabase.from("messages").insert([

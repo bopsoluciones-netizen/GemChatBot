@@ -19,12 +19,12 @@ export default function LinkGeneratorPage() {
 
   const fetchAccount = async () => {
     const { data: { user } } = await supabase.auth.getUser()
-    const { data } = await supabase
+    const { data: accData } = await supabase
       .from("chatbot_accounts")
       .select("*")
-      .eq("creator_id", user?.id)
+      .or(`creator_id.eq.${user?.id},admin_id.eq.${user?.id}`)
       .single()
-    setAccount(data)
+    setAccount(accData)
   }
 
   const copyToClipboard = () => {
@@ -36,7 +36,17 @@ export default function LinkGeneratorPage() {
     setTimeout(() => setCopied(false), 2000)
   }
 
-  if (!account) return <div>Cargando...</div>
+  if (!account && typeof window !== 'undefined') {
+    return (
+      <div className="flex flex-col items-center justify-center h-[60vh] space-y-4">
+        <Link2 className="h-12 w-12 text-zinc-300" />
+        <h2 className="text-xl font-bold">Sin cuenta asignada</h2>
+        <p className="text-zinc-500 text-center max-w-sm">
+          No se encontró un chatbot vinculado a tu usuario. Contacta con soporte técnico.
+        </p>
+      </div>
+    )
+  }
 
   const publicUrl = `${typeof window !== 'undefined' ? window.location.origin : ''}/chat/${account.slug}`
 

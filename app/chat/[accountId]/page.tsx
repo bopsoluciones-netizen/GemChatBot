@@ -11,6 +11,7 @@ import { createClient } from "@/lib/supabase/client"
 import { useParams } from "next/navigation"
 import { format, addDays, isSameDay } from "date-fns"
 import { es } from "date-fns/locale"
+import { toast } from "sonner"
 
 interface Message {
   role: 'user' | 'assistant'
@@ -61,33 +62,53 @@ export default function PublicChatPage() {
 
   const handleLeadSubmit = async (formData: any) => {
     setLoading(true)
-    // 1. Create Lead
-    const { data: leadData } = await supabase
-      .from("leads")
-      .insert([{ 
-        account_id: account.id,
-        ...formData
-      }])
-      .select()
-      .single()
+    try {
+      // 1. Create Lead
+      const { data: leadData, error: leadError } = await supabase
+        .from("leads")
+        .insert([{ 
+          account_id: account.id,
+          ...formData
+        }])
+        .select()
+        .single()
 
-    // 2. Create Conversation
-    const { data: convData } = await supabase
-      .from("conversations")
-      .insert([{
-        account_id: account.id,
-        lead_id: leadData.id
-      }])
-      .select()
-      .single()
+      if (leadError || !leadData) {
+        console.error("Error creating lead:", leadError?.message, leadError?.details)
+        toast.error("Hubo un problema al registrar tus datos. Por favor intenta de nuevo.")
+        setLoading(false)
+        return
+      }
 
-    setLead(leadData)
-    setConversation(convData)
-    setMessages([{ 
-      role: 'assistant', 
-      content: `¡Hola ${formData.full_name}! Bienvenido a ${account.name}. ¿En qué puedo ayudarte hoy?` 
-    }])
-    setLoading(false)
+      // 2. Create Conversation
+      const { data: convData, error: convError } = await supabase
+        .from("conversations")
+        .insert([{
+          account_id: account.id,
+          lead_id: leadData.id
+        }])
+        .select()
+        .single()
+
+      if (convError || !convData) {
+        console.error("Error creating conversation:", convError?.message, convError?.details)
+        toast.error("No se pudo iniciar el chat. Por favor intenta de nuevo.")
+        setLoading(false)
+        return
+      }
+
+      setLead(leadData)
+      setConversation(convData)
+      setMessages([{ 
+        role: 'assistant', 
+        content: `¡Hola ${formData.full_name}! Bienvenido a ${account.name}. ¿En qué puedo ayudarte hoy?` 
+      }])
+    } catch (err) {
+      console.error("Unexpected error in lead submission:", err)
+      toast.error("Ocurrió un error inesperado. Por favor intenta de nuevo.")
+    } finally {
+      setLoading(false)
+    }
   }
 
   const handleSendMessage = async (e: React.FormEvent) => {
@@ -123,9 +144,12 @@ export default function PublicChatPage() {
         } else {
           setMessages(prev => [...prev, { role: 'assistant', content: data.response }])
         }
+      } else if (data.error) {
+        toast.error("Error del asistente", { description: data.error })
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error sending message:", error)
+      toast.error("Error al enviar mensaje", { description: error.message || "Hubo un problema de conexión." })
     } finally {
       setLoading(false)
     }
@@ -209,7 +233,7 @@ export default function PublicChatPage() {
 
       {/* Messages */}
       <div className="flex-1 overflow-hidden relative flex flex-col">
-        <ScrollArea className="flex-1 p-4 md:p-8" ref={scrollRef}>
+        <div className="flex-1 overflow-y-auto p-4 md:p-8" ref={scrollRef}>
           <div className="max-w-3xl mx-auto space-y-6 pb-20">
             {messages.map((msg, idx) => (
               <div
@@ -250,7 +274,7 @@ export default function PublicChatPage() {
               </div>
             )}
           </div>
-        </ScrollArea>
+        </div>
 
         {/* Booking Overlay/Panel */}
         {showBooking && (

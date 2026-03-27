@@ -34,7 +34,7 @@ export default function AdminLeadsPage() {
     const { data: accData } = await supabase
       .from("chatbot_accounts")
       .select("*")
-      .eq("creator_id", user?.id)
+      .or(`creator_id.eq.${user?.id},admin_id.eq.${user?.id}`)
       .single()
 
     if (accData) {
@@ -56,11 +56,25 @@ export default function AdminLeadsPage() {
   }
 
   const filteredLeads = leads.filter(l => 
-    l.full_name.toLowerCase().includes(search.toLowerCase()) || 
-    l.email.toLowerCase().includes(search.toLowerCase())
+    l.full_name?.toLowerCase().includes(search.toLowerCase()) || 
+    l.email?.toLowerCase().includes(search.toLowerCase())
   )
 
-  if (loading) return <div>Cargando leads...</div>
+  if (loading) return <div className="flex h-64 items-center justify-center">Cargando leads...</div>
+
+  if (!account && !loading) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[60vh] space-y-4">
+        <div className="p-4 bg-amber-50 rounded-full">
+          <User className="h-12 w-12 text-amber-500" />
+        </div>
+        <h2 className="text-xl font-bold">Sin cuenta asignada</h2>
+        <p className="text-zinc-500 text-center max-w-sm">
+          Aún no tienes un chatbot configurado. Por favor, contacta con el administrador de la plataforma.
+        </p>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">

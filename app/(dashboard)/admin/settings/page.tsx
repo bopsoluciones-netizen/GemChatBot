@@ -33,13 +33,10 @@ export default function BrandingSettings() {
     setLoading(true)
     const { data: { user } } = await supabase.auth.getUser()
     
-    // For simplicity in this demo, we'll assume the user is linked to one account via creator_id or similar
-    // In a real app, you'd have an account_users table or similar.
-    // For now, let's just fetch the first account where the user is "owner"
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from("chatbot_accounts")
       .select("*")
-      .eq("creator_id", user?.id) // Simplified for the test, should be more robust
+      .or(`creator_id.eq.${user?.id},admin_id.eq.${user?.id}`)
       .single()
 
     if (data) {
@@ -63,7 +60,11 @@ export default function BrandingSettings() {
         .upload(fileName, logo)
 
       if (uploadError) {
-        toast.error("Error al subir logo")
+        if (uploadError.message === 'Bucket not found') {
+          toast.error("Error de configuración: El bucket 'logos' no existe en Supabase Storage.")
+        } else {
+          toast.error("Error al subir logo: " + uploadError.message)
+        }
       } else {
         const { data: { publicUrl } } = supabase.storage
           .from('logos')
@@ -91,8 +92,21 @@ export default function BrandingSettings() {
     setSaving(false)
   }
 
-  if (loading) return <div>Cargando configuración...</div>
-  if (!account) return <div>No se encontró la cuenta.</div>
+  if (loading) return <div className="flex h-64 items-center justify-center">Cargando configuración...</div>
+  
+  if (!account && !loading) {
+    return (
+      <div className="flex flex-col items-center justify-center h-[60vh] space-y-4">
+        <div className="p-4 bg-zinc-100 rounded-full">
+           <Building2 className="h-12 w-12 text-zinc-400" />
+        </div>
+        <h2 className="text-xl font-bold">Sin cuenta asignada</h2>
+        <p className="text-zinc-500 text-center max-w-sm">
+          No tienes una cuenta vinculada para configurar.
+        </p>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6 max-w-4xl">
