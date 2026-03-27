@@ -1,7 +1,7 @@
-import { createClient } from "@/lib/supabase/server"
+import { createAdminClient } from "@/lib/supabase/admin"
 
 export async function getRelevantContext(accountId: string, query: string) {
-  const supabase = await createClient()
+  const supabase = createAdminClient()
 
   // Simplified context retrieval for MVP: 
   // Fetch all knowledge sources for the account and concatenate them.
