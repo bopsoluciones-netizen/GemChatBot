@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server"
 import { createClient } from "@/lib/supabase/server"
-import { startOfDay, endOfDay, addHours, isAfter, isBefore, parseISO } from "date-fns"
+import { startOfDay, endOfDay, addHours, isAfter, isBefore, parseISO, format } from "date-fns"
+import { enUS } from "date-fns/locale"
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url)
@@ -13,17 +14,28 @@ export async function GET(req: Request) {
   const date = parseISO(dateStr)
   const start = startOfDay(date)
   const end = endOfDay(date)
+  const dayName = format(date, 'eee', { locale: enUS }).toLowerCase() // mon, tue, etc.
 
-  // 1. Check if day is blocked
-  const { data: blocks } = await supabase
-    .from("calendar_blocks")
-    .select("*")
-    .eq("account_id", accountId)
-    .gte("start_time", start.toISOString())
-    .lte("end_time", end.toISOString())
+  // 1. Fetch account and its working hours
+  const { data: account } = await supabase
+    .from("chatbot_accounts")
+    .select("working_hours")
+    .eq("id", accountId)
+    .single()
 
-  if (blocks && blocks.length > 0) {
-    return NextResponse.json({ slots: [] }) // Day fully blocked
+  const workingHours = account?.working_hours || {
+    mon: { start: "09:00", end: "18:00", active: true },
+    tue: { start: "09:00", end: "18:00", active: true },
+    wed: { start: "09:00", end: "18:00", active: true },
+    thu: { start: "09:00", end: "18:00", active: true },
+    fri: { start: "09:00", end: "18:00", active: true },
+    sat: { start: "09:00", end: "13:00", active: false },
+    sun: { start: "09:00", end: "13:00", active: false }
+  }
+
+  const dayConfig = workingHours[dayName]
+  if (!dayConfig || !dayConfig.active) {
+    return NextResponse.json({ slots: [] })
   }
 
   // 2. Fetch existing appointments
@@ -32,21 +44,44 @@ export async function GET(req: Request) {
     .select("start_time")
     .eq("account_id", accountId)
     .gte("start_time", start.toISOString())
-    .lte("end_time", end.toISOString())
+    .lte("start_time", end.toISOString())
 
-  // 3. Generate slots (e.g., 9:00 to 18:00, every hour)
+  // 3. Fetch calendar blocks (granular blocks)
+  const { data: blocks } = await supabase
+    .from("calendar_blocks")
+    .select("start_time, end_time")
+    .eq("account_id", accountId)
+    .gte("start_time", start.toISOString())
+    .lte("start_time", end.toISOString())
+
+  // 4. Generate slots based on working hours
   const slots = []
-  let currentSlot = addHours(start, 9) // Start at 9 AM
-  const workEnd = addHours(start, 18) // End at 6 PM
+  const [startH, startM] = dayConfig.start.split(":").map(Number)
+  const [endH, endM] = dayConfig.end.split(":").map(Number)
+  
+  let currentSlot = new Date(date)
+  currentSlot.setHours(startH, startM, 0, 0)
+  
+  const workEnd = new Date(date)
+  workEnd.setHours(endH, endM, 0, 0)
 
   while (isBefore(currentSlot, workEnd)) {
     const slotStr = currentSlot.toISOString()
+    
+    // Check if occupied by appointment
     const isOccupied = appointments?.some(a => a.start_time === slotStr)
     
-    if (!isOccupied) {
+    // Check if overlapping with manual blocks
+    const isBlocked = blocks?.some(b => {
+      const bStart = new Date(b.start_time)
+      const bEnd = new Date(b.end_time)
+      return (currentSlot >= bStart && currentSlot < bEnd)
+    })
+    
+    if (!isOccupied && !isBlocked) {
       slots.push(slotStr)
     }
-    currentSlot = addHours(currentSlot, 1)
+    currentSlot = addHours(currentSlot, 1) // 1 Hour interval
   }
 
   return NextResponse.json({ slots })

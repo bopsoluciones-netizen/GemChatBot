@@ -15,10 +15,20 @@ import {
   DialogTrigger 
 } from "@/components/ui/dialog"
 import { toast } from "sonner"
-import { CalendarDays, Clock, Ban, Trash2, Plus, Loader2 } from "lucide-react"
+import { CalendarDays, Clock, Ban, Trash2, Plus, Loader2, Save } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
-import { format } from "date-fns"
+import { format, startOfDay, endOfDay, addHours } from "date-fns"
 import { es } from "date-fns/locale"
+import { 
+  Select, 
+  SelectContent, 
+  SelectItem, 
+  SelectTrigger, 
+  SelectValue 
+} from "@/components/ui/select"
+import { Switch } from "@/components/ui/switch"
+import { Label } from "@/components/ui/label"
+import { Input } from "@/components/ui/input"
 
 export default function AdminCalendarPage() {
   const [date, setDate] = useState<Date | undefined>(new Date())
@@ -27,6 +37,10 @@ export default function AdminCalendarPage() {
   const [appointments, setAppointments] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [isBlocking, setIsBlocking] = useState(false)
+  const [savingSettings, setSavingSettings] = useState(false)
+  const [blockStartHour, setBlockStartHour] = useState("09:00")
+  const [blockEndHour, setBlockEndHour] = useState("18:00")
+  const [isFullDay, setIsFullDay] = useState(true)
   
   const supabase = createClient()
 
@@ -66,14 +80,25 @@ export default function AdminCalendarPage() {
     setLoading(false)
   }
 
-  const handleBlockDate = async () => {
+  const handleBlockTime = async () => {
     if (!date || !account) return
     
     setIsBlocking(true)
     const start = new Date(date)
-    start.setHours(0, 0, 0, 0)
+    if (isFullDay) {
+      start.setHours(0, 0, 0, 0)
+    } else {
+      const [h, m] = blockStartHour.split(":").map(Number)
+      start.setHours(h, m, 0, 0)
+    }
+
     const end = new Date(date)
-    end.setHours(23, 59, 59, 999)
+    if (isFullDay) {
+      end.setHours(23, 59, 59, 999)
+    } else {
+      const [h, m] = blockEndHour.split(":").map(Number)
+      end.setHours(h, m, 0, 0)
+    }
 
     const { error } = await supabase
       .from("calendar_blocks")
@@ -81,16 +106,40 @@ export default function AdminCalendarPage() {
         account_id: account.id,
         start_time: start.toISOString(),
         end_time: end.toISOString(),
-        reason: "Bloqueo manual"
+        reason: isFullDay ? "Día completo bloqueado" : `Bloqueo: ${blockStartHour} - ${blockEndHour}`
       }])
 
     if (error) {
-      toast.error("Error al bloquear fecha")
+      toast.error("Error al bloquear tiempo")
     } else {
-      toast.success("Fecha bloqueada")
+      toast.success(isFullDay ? "Fecha bloqueada" : "Horario bloqueado")
       fetchData()
     }
     setIsBlocking(false)
+  }
+
+  const saveAvailability = async () => {
+    if (!account) return
+    setSavingSettings(true)
+    
+    const { error } = await supabase
+      .from("chatbot_accounts")
+      .update({ working_hours: account.working_hours })
+      .eq("id", account.id)
+
+    if (error) {
+      toast.error("Error al guardar disponibilidad")
+    } else {
+      toast.success("Disponibilidad guardada correctamente")
+      fetchData()
+    }
+    setSavingSettings(false)
+  }
+
+  const updateWorkingDay = (day: string, field: string, value: any) => {
+    const updated = { ...account.working_hours }
+    updated[day] = { ...updated[day], [field]: value }
+    setAccount({ ...account, working_hours: updated })
   }
 
   const deleteBlock = async (id: string) => {
@@ -165,17 +214,50 @@ export default function AdminCalendarPage() {
                 </CardTitle>
                 <CardDescription>Eventos y disponibilidad para este día.</CardDescription>
               </div>
-              {date && !isDateBlocked && (
-                <Button variant="outline" size="sm" className="text-amber-600 hover:text-amber-700 hover:bg-amber-50" onClick={handleBlockDate} disabled={isBlocking}>
-                  <Ban className="mr-2 h-4 w-4" />
-                  Bloquear Día
-                </Button>
-              )}
-              {isDateBlocked && (
-                <Badge variant="destructive" className="flex gap-1 py-1">
-                  <Ban className="h-3 w-3" />
-                  Día Bloqueado
-                </Badge>
+              {date && (
+                <Dialog>
+                  <DialogTrigger 
+                    render={
+                      <Button variant="outline" size="sm" className="text-amber-600 hover:text-amber-700 hover:bg-amber-50" disabled={isBlocking}>
+                        <Ban className="mr-2 h-4 w-4" />
+                        Bloquear Tiempo
+                      </Button>
+                    }
+                  />
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Bloquear disponibilidad</DialogTitle>
+                      <DialogDescription>
+                        Selecciona el rango de tiempo que deseas bloquear para el {format(date, "PPP", { locale: es })}.
+                      </DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                      <div className="flex items-center gap-2">
+                        <Switch id="full-day" checked={isFullDay} onCheckedChange={(checked: boolean) => setIsFullDay(checked)} />
+                        <Label htmlFor="full-day">Bloquear día completo</Label>
+                      </div>
+                      
+                      {!isFullDay && (
+                        <div className="grid grid-cols-2 gap-4">
+                          <div className="space-y-2">
+                            <Label>Hora Inicio</Label>
+                            <Input type="time" value={blockStartHour} onChange={(e) => setBlockStartHour(e.target.value)} />
+                          </div>
+                          <div className="space-y-2">
+                            <Label>Hora Fin</Label>
+                            <Input type="time" value={blockEndHour} onChange={(e) => setBlockEndHour(e.target.value)} />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                    <DialogFooter>
+                      <Button variant="outline" onClick={() => setIsBlocking(false)}>Cancelar</Button>
+                      <Button onClick={handleBlockTime} disabled={isBlocking}>
+                        {isBlocking ? "Bloqueando..." : "Confirmar Bloqueo"}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
               )}
             </CardHeader>
             <CardContent>
@@ -205,7 +287,7 @@ export default function AdminCalendarPage() {
             </CardContent>
           </Card>
 
-          <Card className="border-0 shadow-sm">
+            <Card className="border-0 shadow-sm">
             <CardHeader>
               <CardTitle className="text-lg">Resumen de Bloqueos</CardTitle>
               <CardDescription>Días u horarios que has marcado como no disponibles.</CardDescription>
@@ -217,9 +299,14 @@ export default function AdminCalendarPage() {
                 <div className="space-y-2">
                   {blocks.map(block => (
                     <div key={block.id} className="flex items-center justify-between py-2 border-b last:border-0">
-                      <div className="flex items-center gap-2">
-                        <CalendarDays className="h-4 w-4 text-amber-500" />
-                        <span className="text-sm">{format(new Date(block.start_time), 'PPP', { locale: es })}</span>
+                      <div className="flex flex-col">
+                        <div className="flex items-center gap-2">
+                          <CalendarDays className="h-4 w-4 text-amber-500" />
+                          <span className="text-sm font-medium">{format(new Date(block.start_time), 'PPP', { locale: es })}</span>
+                        </div>
+                        <p className="text-[10px] text-zinc-500 ml-6">
+                          {format(new Date(block.start_time), 'HH:mm')} - {format(new Date(block.end_time), 'HH:mm')} ({block.reason})
+                        </p>
                       </div>
                       <Button variant="ghost" size="icon" className="h-8 w-8 text-zinc-400 hover:text-destructive" onClick={() => deleteBlock(block.id)}>
                         <Trash2 className="h-4 w-4" />
@@ -228,6 +315,59 @@ export default function AdminCalendarPage() {
                   ))}
                 </div>
               )}
+            </CardContent>
+          </Card>
+
+          <Card className="border-0 shadow-sm">
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="text-lg">Configuración de Disponibilidad</CardTitle>
+                <CardDescription>Define tus horarios estándar de trabajo por día.</CardDescription>
+              </div>
+              <Button size="sm" onClick={saveAvailability} disabled={savingSettings}>
+                {savingSettings ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4 mr-2" />}
+                Guardar Horarios
+              </Button>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {account.working_hours && Object.entries(account.working_hours).map(([day, config]: [string, any]) => (
+                  <div key={day} className="flex items-center justify-between p-3 border rounded-lg bg-zinc-50 dark:bg-zinc-900">
+                    <div className="flex items-center gap-3 w-24">
+                      <Switch 
+                        checked={config.active} 
+                        onCheckedChange={(checked) => updateWorkingDay(day, 'active', checked)} 
+                      />
+                      <span className="text-xs font-bold uppercase">{
+                        day === 'mon' ? 'Lun' : 
+                        day === 'tue' ? 'Mar' : 
+                        day === 'wed' ? 'Mié' : 
+                        day === 'thu' ? 'Jue' : 
+                        day === 'fri' ? 'Vie' : 
+                        day === 'sat' ? 'Sáb' : 'Dom'
+                      }</span>
+                    </div>
+                    
+                    <div className="flex items-center gap-2 flex-1 justify-end">
+                      <Input 
+                        type="time" 
+                        value={config.start} 
+                        onChange={(e) => updateWorkingDay(day, 'start', e.target.value)}
+                        disabled={!config.active}
+                        className="w-24 h-8 text-xs"
+                      />
+                      <span className="text-zinc-400">-</span>
+                      <Input 
+                        type="time" 
+                        value={config.end} 
+                        onChange={(e) => updateWorkingDay(day, 'end', e.target.value)}
+                        disabled={!config.active}
+                        className="w-24 h-8 text-xs"
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
             </CardContent>
           </Card>
         </div>
