@@ -98,7 +98,7 @@ export function LeadForm({ onSubmit, loading, companyName, logoUrl }: {
             </div>
             <div className="grid gap-2">
               <Label htmlFor="country">País</Label>
-              <Select onValueChange={(v: string) => setFormData({...formData, country: v})} required>
+              <Select onValueChange={(v: string | null) => v && setFormData({...formData, country: v})} required>
                 <SelectTrigger id="country">
                   <SelectValue placeholder="País" />
                 </SelectTrigger>
