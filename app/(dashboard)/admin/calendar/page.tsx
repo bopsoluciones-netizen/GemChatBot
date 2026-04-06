@@ -84,28 +84,23 @@ export default function AdminCalendarPage() {
     if (!date || !account) return
     
     setIsBlocking(true)
-    const start = new Date(date)
-    if (isFullDay) {
-      start.setHours(0, 0, 0, 0)
-    } else {
-      const [h, m] = blockStartHour.split(":").map(Number)
-      start.setHours(h, m, 0, 0)
-    }
+    const baseDateStr = format(date, 'yyyy-MM-dd')
+    let startStr, endStr;
 
-    const end = new Date(date)
     if (isFullDay) {
-      end.setHours(23, 59, 59, 999)
+      startStr = `${baseDateStr}T00:00:00.000Z`
+      endStr = `${baseDateStr}T23:59:59.999Z`
     } else {
-      const [h, m] = blockEndHour.split(":").map(Number)
-      end.setHours(h, m, 0, 0)
+      startStr = `${baseDateStr}T${blockStartHour}:00.000Z`
+      endStr = `${baseDateStr}T${blockEndHour}:00.000Z`
     }
 
     const { error } = await supabase
       .from("calendar_blocks")
       .insert([{
         account_id: account.id,
-        start_time: start.toISOString(),
-        end_time: end.toISOString(),
+        start_time: startStr,
+        end_time: endStr,
         reason: isFullDay ? "Día completo bloqueado" : `Bloqueo: ${blockStartHour} - ${blockEndHour}`
       }])
 

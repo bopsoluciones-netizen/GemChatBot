@@ -25,9 +25,8 @@ interface NavItem {
 }
 
 const creatorNavItems: NavItem[] = [
-  { title: "Dashboard", href: "/creator", icon: LayoutDashboard },
+  { title: "Métricas Globales", href: "/creator", icon: LayoutDashboard },
   { title: "Cuentas", href: "/creator/accounts", icon: Users },
-  { title: "Métricas Globales", href: "/creator/analytics", icon: BarChart3 },
 ]
 
 const adminNavItems: NavItem[] = [

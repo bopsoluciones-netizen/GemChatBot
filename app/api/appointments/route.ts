@@ -59,29 +59,27 @@ export async function GET(req: Request) {
   const [startH, startM] = dayConfig.start.split(":").map(Number)
   const [endH, endM] = dayConfig.end.split(":").map(Number)
   
-  let currentSlot = new Date(date)
-  currentSlot.setHours(startH, startM, 0, 0)
+  const baseDateStr = format(date, 'yyyy-MM-dd')
   
-  const workEnd = new Date(date)
-  workEnd.setHours(endH, endM, 0, 0)
-
-  while (isBefore(currentSlot, workEnd)) {
-    const slotStr = currentSlot.toISOString()
+  for (let h = startH; h < endH; h++) {
+    const slotStr = `${baseDateStr}T${h.toString().padStart(2, '0')}:00:00.000Z`
     
-    // Check if occupied by appointment
-    const isOccupied = appointments?.some(a => a.start_time === slotStr)
+    // Check if occupied by appointment (exact string match)
+    const isOccupied = appointments?.some(a => {
+      const aTime = new Date(a.start_time).toISOString()
+      return aTime === slotStr
+    })
     
     // Check if overlapping with manual blocks
     const isBlocked = blocks?.some(b => {
-      const bStart = new Date(b.start_time)
-      const bEnd = new Date(b.end_time)
-      return (currentSlot >= bStart && currentSlot < bEnd)
+      const bStart = new Date(b.start_time).toISOString()
+      const bEnd = new Date(b.end_time).toISOString()
+      return (slotStr >= bStart && slotStr < bEnd)
     })
     
     if (!isOccupied && !isBlocked) {
       slots.push(slotStr)
     }
-    currentSlot = addHours(currentSlot, 1) // 1 Hour interval
   }
 
   return NextResponse.json({ slots })

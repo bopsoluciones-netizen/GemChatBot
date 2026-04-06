@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server"
 
 export async function POST(req: Request) {
   try {
-    const { message, accountId, conversationId } = await req.json()
+    const { message, accountId, conversationId, language } = await req.json()
     const supabase = await createClient()
 
     // 1. Get Account details for tone and name
@@ -21,7 +21,13 @@ export async function POST(req: Request) {
     const context = await getRelevantContext(accountId, message)
 
     // 3. Get OpenRouter Response
-    const aiResponse = await getOpenRouterResponse(message, context, account.tone, account.name)
+    const aiResponse = await getOpenRouterResponse(
+      message, 
+      context, 
+      account.tone, 
+      account.name,
+      language || 'es'
+    )
 
     // 4. Save messages to DB
     await supabase.from("messages").insert([
